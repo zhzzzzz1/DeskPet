@@ -29,8 +29,8 @@ namespace DesktopPet
         private const int PatCdSeconds = 30;
         private const int MaxIntimacy = 999;
         private const string CurrentVersion = "1.4.1";
-        private const string VersionUrl = "https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/version.txt";
-        private const string DownloadUrl = "https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/DeskPet.exe";
+        private const string VersionUrl = "https://cdn.jsdelivr.net/gh/zhzzzzz1/DeskPet@main/version.txt";
+        private const string DownloadUrl = "https://cdn.jsdelivr.net/gh/zhzzzzz1/DeskPet@main/DeskPet.exe";
         private Point dragStart;
         private bool isDragging;
         private bool wasOnPet = false;
@@ -1472,51 +1472,64 @@ namespace DesktopPet
 
         static void CheckForUpdate()
         {
-            try
+            System.Threading.Thread t = new System.Threading.Thread(delegate()
             {
-                using (WebClient wc = new WebClient())
+                try
                 {
-                    wc.Headers.Add("User-Agent", "DeskPet-Updater");
-                    string remoteVersion = wc.DownloadString(VersionUrl).Trim();
-                    if (string.IsNullOrEmpty(remoteVersion)) return;
-                    if (remoteVersion == CurrentVersion) return;
-
-                    DialogResult result = MessageBox.Show(
-                        "发现新版本 v" + remoteVersion + "（当前 v" + CurrentVersion + "）\n\n是否立即下载更新？",
-                        "DeskPet 更新", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
-                    if (result != DialogResult.Yes) return;
-
-                    string exePath = Application.ExecutablePath;
-                    string newExePath = exePath + ".new";
-                    string batPath = Path.Combine(Application.StartupPath, "update.bat");
-
-                    wc.DownloadFile(DownloadUrl, newExePath);
-
-                    string batContent = "@echo off\r\n";
-                    batContent += "echo 正在更新 DeskPet...\r\n";
-                    batContent += ":retry\r\n";
-                    batContent += "timeout /t 1 /nobreak >nul\r\n";
-                    batContent += "del /f \"" + exePath + "\" 2>nul\r\n";
-                    batContent += "if exist \"" + exePath + "\" goto retry\r\n";
-                    batContent += "move /y \"" + newExePath + "\" \"" + exePath + "\"\r\n";
-                    batContent += "start \"\" \"" + exePath + "\"\r\n";
-                    batContent += "del /f \"%~f0\" & exit\r\n";
-                    File.WriteAllText(batPath, batContent, System.Text.Encoding.Default);
-
-                    Process.Start(new ProcessStartInfo
+                    HttpWebRequest req = (HttpWebRequest)HttpWebRequest.Create(VersionUrl);
+                    req.UserAgent = "DeskPet-Updater";
+                    req.Timeout = 5000;
+                    req.ReadWriteTimeout = 5000;
+                    using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
+                    using (System.IO.StreamReader sr = new System.IO.StreamReader(resp.GetResponseStream()))
                     {
-                        FileName = batPath,
-                        WindowStyle = ProcessWindowStyle.Hidden,
-                        UseShellExecute = true
-                    });
+                        string remoteVersion = sr.ReadToEnd().Trim();
+                        if (string.IsNullOrEmpty(remoteVersion)) return;
+                        if (remoteVersion == CurrentVersion) return;
 
-                    Environment.Exit(0);
+                        DialogResult result = MessageBox.Show(
+                            "发现新版本 v" + remoteVersion + "（当前 v" + CurrentVersion + "）\n\n是否立即下载更新？",
+                            "DeskPet 更新", MessageBoxButtons.YesNo, MessageBoxIcon.Information);
+                        if (result != DialogResult.Yes) return;
+
+                        string exePath = Application.ExecutablePath;
+                        string newExePath = exePath + ".new";
+                        string batPath = Path.Combine(Application.StartupPath, "update.bat");
+
+                        using (WebClient wc = new WebClient())
+                        {
+                            wc.Headers.Add("User-Agent", "DeskPet-Updater");
+                            wc.DownloadFile(DownloadUrl, newExePath);
+                        }
+
+                        string batContent = "@echo off\r\n";
+                        batContent += "echo 正在更新 DeskPet...\r\n";
+                        batContent += ":retry\r\n";
+                        batContent += "timeout /t 1 /nobreak >nul\r\n";
+                        batContent += "del /f \"" + exePath + "\" 2>nul\r\n";
+                        batContent += "if exist \"" + exePath + "\" goto retry\r\n";
+                        batContent += "move /y \"" + newExePath + "\" \"" + exePath + "\"\r\n";
+                        batContent += "start \"\" \"" + exePath + "\"\r\n";
+                        batContent += "del /f \"%~f0\" & exit\r\n";
+                        File.WriteAllText(batPath, batContent, System.Text.Encoding.Default);
+
+                        Process.Start(new ProcessStartInfo
+                        {
+                            FileName = batPath,
+                            WindowStyle = ProcessWindowStyle.Hidden,
+                            UseShellExecute = true
+                        });
+
+                        Environment.Exit(0);
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                System.Diagnostics.Debug.WriteLine("Update check failed: " + ex.Message);
-            }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine("Update check failed: " + ex.Message);
+                }
+            });
+            t.IsBackground = true;
+            t.Start();
         }
 
         [STAThread]
