@@ -1496,31 +1496,122 @@ namespace DesktopPet
                         string newExePath = exePath + ".new";
                         string batPath = Path.Combine(Application.StartupPath, "update.bat");
 
-                        using (WebClient wc = new WebClient())
+                        Form progressForm = null;
+                        ProgressBar progress = null;
+                        Label progressLabel = null;
+                        Label percentLabel = null;
+                        try
                         {
-                            wc.Headers.Add("User-Agent", "DeskPet-Updater");
-                            wc.DownloadFile(DownloadUrl, newExePath);
+                            progressForm = new Form();
+                            progressForm.Text = "DeskPet 更新";
+                            progressForm.Size = new Size(360, 130);
+                            progressForm.StartPosition = FormStartPosition.CenterScreen;
+                            progressForm.FormBorderStyle = FormBorderStyle.FixedDialog;
+                            progressForm.MaximizeBox = false;
+                            progressForm.ControlBox = false;
+                            progressForm.BackColor = Color.FromArgb(255, 252, 245);
+
+                            progressLabel = new Label();
+                            progressLabel.Text = "正在下载新版本...";
+                            progressLabel.Location = new Point(20, 15);
+                            progressLabel.Size = new Size(200, 20);
+                            progressLabel.Font = new Font("Microsoft YaHei", 9);
+                            progressForm.Controls.Add(progressLabel);
+
+                            percentLabel = new Label();
+                            percentLabel.Text = "0%";
+                            percentLabel.Location = new Point(300, 15);
+                            percentLabel.Size = new Size(40, 20);
+                            percentLabel.Font = new Font("Microsoft YaHei", 9);
+                            percentLabel.TextAlign = ContentAlignment.MiddleRight;
+                            progressForm.Controls.Add(percentLabel);
+
+                            progress = new ProgressBar();
+                            progress.Location = new Point(20, 45);
+                            progress.Size = new Size(320, 25);
+                            progressForm.Controls.Add(progress);
+
+                            Label hintLabel = new Label();
+                            hintLabel.Text = "下载完成后将自动替换并重启";
+                            hintLabel.Location = new Point(20, 78);
+                            hintLabel.Size = new Size(320, 20);
+                            hintLabel.Font = new Font("Microsoft YaHei", 8);
+                            hintLabel.ForeColor = Color.Gray;
+                            hintLabel.TextAlign = ContentAlignment.MiddleCenter;
+                            progressForm.Controls.Add(hintLabel);
+
+                            progressForm.Show();
+                            progressForm.Refresh();
+
+                            using (WebClient wc = new WebClient())
+                            {
+                                wc.Headers.Add("User-Agent", "DeskPet-Updater");
+                                wc.DownloadProgressChanged += delegate(object sender, DownloadProgressChangedEventArgs e)
+                                {
+                                    try
+                                    {
+                                        progress.Maximum = 100;
+                                        progress.Value = e.ProgressPercentage;
+                                        percentLabel.Text = e.ProgressPercentage + "%";
+                                        progressLabel.Text = "正在下载... " + (e.BytesReceived / 1024) + " KB / " + (e.TotalBytesToReceive / 1024) + " KB";
+                                        progressForm.Refresh();
+                                    }
+                                    catch { }
+                                };
+                                wc.DownloadFileCompleted += delegate(object sender, System.ComponentModel.AsyncCompletedEventArgs e)
+                                {
+                                    try
+                                    {
+                                        if (e.Error != null)
+                                        {
+                                            MessageBox.Show("下载失败: " + e.Error.Message, "更新失败", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                            progressForm.Close();
+                                            return;
+                                        }
+                                        progressLabel.Text = "下载完成，正在安装...";
+                                        progressForm.Refresh();
+
+                                        string batContent = "@echo off\r\n";
+                                        batContent += "echo 正在更新 DeskPet...\r\n";
+                                        batContent += ":retry\r\n";
+                                        batContent += "timeout /t 1 /nobreak >nul\r\n";
+                                        batContent += "del /f \"" + exePath + "\" 2>nul\r\n";
+                                        batContent += "if exist \"" + exePath + "\" goto retry\r\n";
+                                        batContent += "move /y \"" + newExePath + "\" \"" + exePath + "\"\r\n";
+                                        batContent += "start \"\" \"" + exePath + "\"\r\n";
+                                        batContent += "del /f \"%~f0\" & exit\r\n";
+                                        File.WriteAllText(batPath, batContent, System.Text.Encoding.Default);
+
+                                        Process.Start(new ProcessStartInfo
+                                        {
+                                            FileName = batPath,
+                                            WindowStyle = ProcessWindowStyle.Hidden,
+                                            UseShellExecute = true
+                                        });
+
+                                        Environment.Exit(0);
+                                    }
+                                    catch (Exception ex2)
+                                    {
+                                        MessageBox.Show("更新失败: " + ex2.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                                        progressForm.Close();
+                                    }
+                                };
+                                wc.DownloadFileAsync(new Uri(DownloadUrl), newExePath);
+
+                                while (progressForm != null && !progressForm.IsDisposed)
+                                {
+                                    Application.DoEvents();
+                                    System.Threading.Thread.Sleep(50);
+                                }
+                            }
                         }
-
-                        string batContent = "@echo off\r\n";
-                        batContent += "echo 正在更新 DeskPet...\r\n";
-                        batContent += ":retry\r\n";
-                        batContent += "timeout /t 1 /nobreak >nul\r\n";
-                        batContent += "del /f \"" + exePath + "\" 2>nul\r\n";
-                        batContent += "if exist \"" + exePath + "\" goto retry\r\n";
-                        batContent += "move /y \"" + newExePath + "\" \"" + exePath + "\"\r\n";
-                        batContent += "start \"\" \"" + exePath + "\"\r\n";
-                        batContent += "del /f \"%~f0\" & exit\r\n";
-                        File.WriteAllText(batPath, batContent, System.Text.Encoding.Default);
-
-                        Process.Start(new ProcessStartInfo
+                        catch (Exception ex2)
                         {
-                            FileName = batPath,
-                            WindowStyle = ProcessWindowStyle.Hidden,
-                            UseShellExecute = true
-                        });
-
-                        Environment.Exit(0);
+                            if (progressForm != null) progressForm.Close();
+                            throw ex2;
+                        }
+                        return;
                     }
                 }
                 catch (Exception ex)
