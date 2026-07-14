@@ -31,13 +31,11 @@ namespace DesktopPet
         private const string CurrentVersion = "1.4.3";
         private static string[] VersionUrls = new string[] {
             "https://gh-proxy.com/https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/version.txt",
-            "https://ghproxy.net/https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/version.txt",
-            "https://cdn.jsdelivr.net/gh/zhzzzzz1/DeskPet@main/version.txt"
+            "https://ghproxy.net/https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/version.txt"
         };
         private static string[] DownloadUrls = new string[] {
             "https://gh-proxy.com/https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/DeskPet.exe",
-            "https://ghproxy.net/https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/DeskPet.exe",
-            "https://cdn.jsdelivr.net/gh/zhzzzzz1/DeskPet@main/DeskPet.exe"
+            "https://ghproxy.net/https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/DeskPet.exe"
         };
         private Point dragStart;
         private bool isDragging;
@@ -1489,7 +1487,7 @@ namespace DesktopPet
                     {
                         try
                         {
-                            HttpWebRequest req = (HttpWebRequest)HttpWebRequest.Create(VersionUrls[i] + "?t=" + DateTime.Now.Ticks);
+                            HttpWebRequest req = (HttpWebRequest)HttpWebRequest.Create(VersionUrls[i]);
                             req.UserAgent = "DeskPet-Updater";
                             req.Timeout = 5000;
                             req.ReadWriteTimeout = 5000;
@@ -1592,7 +1590,7 @@ namespace DesktopPet
                                         dlError = e.Error;
                                         done.Set();
                                     };
-                                    wc.DownloadFileAsync(new Uri(DownloadUrls[i] + "?t=" + DateTime.Now.Ticks), newExePath);
+                                    wc.DownloadFileAsync(new Uri(DownloadUrls[i]), newExePath);
 
                                     while (!done.WaitOne(50))
                                     {
