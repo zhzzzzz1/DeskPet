@@ -28,7 +28,7 @@ namespace DesktopPet
         private const int FeedCdHours = 4;
         private const int PatCdSeconds = 30;
         private const int MaxIntimacy = 999;
-        private const string CurrentVersion = "1.4";
+        private const string CurrentVersion = "1.4.1";
         private const string VersionUrl = "https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/version.txt";
         private const string DownloadUrl = "https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/DeskPet.exe";
         private Point dragStart;
