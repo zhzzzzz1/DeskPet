@@ -681,7 +681,7 @@ namespace DesktopPet
         // 推箱子游戏进度保存
         private string sokobanSavePath = Path.Combine(Application.StartupPath, "pet_sokoban.txt");
         public int SokobanUnlockedLevel = 1;
-        public bool[] SokobanRewarded = new bool[6]; // index 1-5
+        public bool[] SokobanRewarded = new bool[7]; // index 1-6
         public void LoadSokobanProgress()
         {
             try
@@ -693,9 +693,9 @@ namespace DesktopPet
                     {
                         Int32.TryParse(lines[0], out SokobanUnlockedLevel);
                         if (SokobanUnlockedLevel < 1) SokobanUnlockedLevel = 1;
-                        if (SokobanUnlockedLevel > 5) SokobanUnlockedLevel = 5;
+                        if (SokobanUnlockedLevel > 6) SokobanUnlockedLevel = 6;
                         string[] rewards = lines[1].Split(',');
-                        for (int i = 1; i <= 5 && i < rewards.Length; i++)
+                        for (int i = 1; i <= 6 && i < rewards.Length; i++)
                         {
                             bool val; Boolean.TryParse(rewards[i], out val);
                             SokobanRewarded[i] = val;
@@ -709,7 +709,7 @@ namespace DesktopPet
         {
             try
             {
-                string rewards = string.Join(",", new string[] { "", SokobanRewarded[1].ToString(), SokobanRewarded[2].ToString(), SokobanRewarded[3].ToString(), SokobanRewarded[4].ToString(), SokobanRewarded[5].ToString() });
+                string rewards = string.Join(",", new string[] { "", SokobanRewarded[1].ToString(), SokobanRewarded[2].ToString(), SokobanRewarded[3].ToString(), SokobanRewarded[4].ToString(), SokobanRewarded[5].ToString(), SokobanRewarded[6].ToString() });
                 File.WriteAllText(sokobanSavePath, SokobanUnlockedLevel + "\n" + rewards);
             }
             catch { }
@@ -2809,15 +2809,16 @@ namespace DesktopPet
         private Label crystalLabel, statusLabel;
         private Button resetBtn;
 
-        private static int[][,] levels = new int[5][,]
+        private static int[][,] levels = new int[6][,]
         {
             new int[,] { {1,1,1,1,1}, {1,0,0,0,1}, {1,0,3,2,1}, {1,0,4,0,1}, {1,1,1,1,1} },
             new int[,] { {1,1,1,1,1,1}, {1,0,0,0,0,1}, {1,0,3,0,2,1}, {1,0,0,4,0,1}, {1,1,1,1,1,1} },
             new int[,] { {1,1,1,1,1,1}, {1,0,0,2,0,1}, {1,0,3,0,0,1}, {1,0,3,4,0,1}, {1,0,0,2,0,1}, {1,1,1,1,1,1} },
             new int[,] { {1,1,1,1,1,1,1}, {1,0,0,2,0,0,1}, {1,0,3,0,0,3,1}, {1,0,0,4,0,2,1}, {1,1,1,1,1,1,1} },
-            new int[,] { {1,1,1,1,1,1,1}, {1,2,0,0,0,2,1}, {1,0,1,3,1,0,1}, {1,0,3,4,3,0,1}, {1,0,0,2,0,0,1}, {1,1,1,1,1,1,1} }
+            new int[,] { {1,1,1,1,1,1,1}, {1,2,0,0,0,2,1}, {1,0,1,3,1,0,1}, {1,0,3,4,3,0,1}, {1,0,0,2,0,0,1}, {1,1,1,1,1,1,1} },
+            new int[,] { {1,1,1,1,1,1,1}, {1,2,0,0,0,2,1}, {1,0,0,1,0,0,1}, {1,0,3,0,3,0,1}, {1,0,0,4,0,0,1}, {1,0,3,2,0,0,1}, {1,1,1,1,1,1,1} }
         };
-        private static int[] levelRewards = new int[] { 0, 10, 20, 30, 50, 80 };
+        private static int[] levelRewards = new int[] { 0, 10, 20, 30, 50, 80, 120 };
 
         public GameForm(PetForm owner)
         {
@@ -2970,9 +2971,9 @@ namespace DesktopPet
             titleLabel.Text = "选择关卡";
             backBtn.Visible = true;
 
-            int[] rewards = new int[] { 0, 10, 20, 30, 50, 80 };
+            int[] rewards = new int[] { 0, 10, 20, 30, 50, 80, 120 };
 
-            for (int i = 1; i <= 5; i++)
+            for (int i = 1; i <= 6; i++)
             {
                 int level = i;
                 bool unlocked = level <= pet.SokobanUnlockedLevel;
@@ -3219,7 +3220,7 @@ namespace DesktopPet
                     crystalLabel.Text = "已获得 " + levelRewards[currentLevel] + " \uD83D\uDC8E!";
             }
 
-            if (currentLevel < 5 && pet.SokobanUnlockedLevel <= currentLevel)
+            if (currentLevel < 6 && pet.SokobanUnlockedLevel <= currentLevel)
             {
                 pet.SokobanUnlockedLevel = currentLevel + 1;
                 pet.SaveSokobanProgress();
@@ -3230,7 +3231,7 @@ namespace DesktopPet
             t.Tick += (s, e) =>
             {
                 t.Stop();
-                if (currentLevel < 5 && pet.SokobanUnlockedLevel > currentLevel)
+                if (currentLevel < 6 && pet.SokobanUnlockedLevel > currentLevel)
                     StartLevel(currentLevel + 1);
             };
             t.Start();
