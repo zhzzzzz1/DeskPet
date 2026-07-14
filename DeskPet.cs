@@ -28,7 +28,7 @@ namespace DesktopPet
         private const int FeedCdHours = 4;
         private const int PatCdSeconds = 30;
         private const int MaxIntimacy = 999;
-        private const string CurrentVersion = "1.4.3";
+        private const string CurrentVersion = "1.4.4";
         private static string[] VersionUrls = new string[] {
             "https://gh-proxy.com/https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/version.txt",
             "https://ghproxy.net/https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/version.txt"
@@ -1482,6 +1482,9 @@ namespace DesktopPet
             {
                 try
                 {
+                    // 强制使用 TLS 1.2（.NET 4.x 默认 Ssl3|Tls，现代服务器要求 TLS1.2+）
+                    System.Net.ServicePointManager.SecurityProtocol = (System.Net.SecurityProtocolType)3072;
+
                     string remoteVersion = null;
                     for (int i = 0; i < VersionUrls.Length; i++)
                     {
@@ -1494,14 +1497,18 @@ namespace DesktopPet
                             using (HttpWebResponse resp = (HttpWebResponse)req.GetResponse())
                             using (System.IO.StreamReader sr = new System.IO.StreamReader(resp.GetResponseStream()))
                             {
-                                remoteVersion = sr.ReadToEnd().Trim();
-                                if (!string.IsNullOrEmpty(remoteVersion)) break;
+                                string ver = sr.ReadToEnd().Trim();
+                                if (!string.IsNullOrEmpty(ver))
+                                {
+                                    if (string.IsNullOrEmpty(remoteVersion) || string.Compare(ver, remoteVersion) > 0)
+                                        remoteVersion = ver;
+                                }
                             }
                         }
                         catch { }
                     }
                     if (string.IsNullOrEmpty(remoteVersion)) return;
-                    if (remoteVersion == CurrentVersion) return;
+                    if (string.Compare(remoteVersion, CurrentVersion) <= 0) return;
 
                     DialogResult result = MessageBox.Show(
                         "发现新版本 v" + remoteVersion + "（当前 v" + CurrentVersion + "）\n\n是否立即下载更新？",
