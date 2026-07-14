@@ -1476,7 +1476,7 @@ namespace DesktopPet
             {
                 try
                 {
-                    HttpWebRequest req = (HttpWebRequest)HttpWebRequest.Create(VersionUrl);
+                    HttpWebRequest req = (HttpWebRequest)HttpWebRequest.Create(VersionUrl + "?t=" + DateTime.Now.Ticks);
                     req.UserAgent = "DeskPet-Updater";
                     req.Timeout = 5000;
                     req.ReadWriteTimeout = 5000;
