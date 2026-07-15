@@ -28,7 +28,7 @@ namespace DesktopPet
         private const int FeedCdHours = 4;
         private const int PatCdSeconds = 30;
         private const int MaxIntimacy = 999;
-        private const string CurrentVersion = "1.5.0";
+        private const string CurrentVersion = "1.5.2";
         private static string[] VersionUrls = new string[] {
             "https://gh-proxy.com/https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/version.txt",
             "https://ghproxy.net/https://raw.githubusercontent.com/zhzzzzz1/DeskPet/main/version.txt"
@@ -272,6 +272,8 @@ namespace DesktopPet
             trayIcon.ContextMenuStrip = trayMenu;
             trayIcon.DoubleClick += ShowPet;
             trayIcon.Visible = true;
+            CuteTheme.StyleMenu(petMenu);
+            CuteTheme.StyleMenu(trayMenu);
 
             this.MouseDown += OnMouseDown;
             this.MouseMove += OnMouseMove;
@@ -415,6 +417,7 @@ namespace DesktopPet
             if (bubbleY < 0) bubbleY = petPos.Y + this.Height + 4;
             bubble.Location = new Point(bubbleX, bubbleY);
 
+            CuteTheme.ApplyFloatingForm(bubble, 18);
             bubble.Opacity = 0;
             bubble.Show();
             activeBubble = bubble;
@@ -495,11 +498,11 @@ namespace DesktopPet
 
         private void CheckMilestoneAchievements()
         {
-            CheckAndUnlockAchievement("first_handshake");
+            if (totalHandshakes > 0) CheckAndUnlockAchievement("first_handshake");
             if (totalHandshakes >= 10) CheckAndUnlockAchievement("handshake10");
-            CheckAndUnlockAchievement("first_feed");
+            if (totalFeeds > 0) CheckAndUnlockAchievement("first_feed");
             if (totalFeeds >= 10) CheckAndUnlockAchievement("feed10");
-            CheckAndUnlockAchievement("first_pat");
+            if (totalPats > 0) CheckAndUnlockAchievement("first_pat");
             if (totalPats >= 50) CheckAndUnlockAchievement("pat50");
             if (intimacy >= 20) CheckAndUnlockAchievement("intimacy20");
             if (intimacy >= 50) CheckAndUnlockAchievement("intimacy50");
@@ -566,6 +569,7 @@ namespace DesktopPet
 
             int screenW = Screen.PrimaryScreen.WorkingArea.Width;
             notify.Location = new Point(screenW - notify.Width - 15, 15);
+            CuteTheme.ApplyFloatingForm(notify, 18);
             notify.Opacity = 0;
             notify.Show();
 
@@ -721,6 +725,44 @@ namespace DesktopPet
             catch { }
         }
 
+        // 宠物飞飞关卡进度保存
+        private string flappySavePath = Path.Combine(Application.StartupPath, "pet_flappy.txt");
+        public int FlappyUnlockedLevel = 1;
+        public bool[] FlappyRewarded = new bool[11]; // index 1-10
+        public void LoadFlappyProgress()
+        {
+            try
+            {
+                if (File.Exists(flappySavePath))
+                {
+                    string[] lines = File.ReadAllLines(flappySavePath);
+                    if (lines.Length >= 2)
+                    {
+                        Int32.TryParse(lines[0], out FlappyUnlockedLevel);
+                        if (FlappyUnlockedLevel < 1) FlappyUnlockedLevel = 1;
+                        if (FlappyUnlockedLevel > 10) FlappyUnlockedLevel = 10;
+                        string[] rewards = lines[1].Split(',');
+                        for (int i = 1; i <= 10 && i < rewards.Length; i++)
+                        {
+                            bool value;
+                            Boolean.TryParse(rewards[i], out value);
+                            FlappyRewarded[i] = value;
+                        }
+                    }
+                }
+            }
+            catch { }
+        }
+        public void SaveFlappyProgress()
+        {
+            try
+            {
+                string rewards = string.Join(",", new string[] { "", FlappyRewarded[1].ToString(), FlappyRewarded[2].ToString(), FlappyRewarded[3].ToString(), FlappyRewarded[4].ToString(), FlappyRewarded[5].ToString(), FlappyRewarded[6].ToString(), FlappyRewarded[7].ToString(), FlappyRewarded[8].ToString(), FlappyRewarded[9].ToString(), FlappyRewarded[10].ToString() });
+                File.WriteAllText(flappySavePath, FlappyUnlockedLevel + "\n" + rewards);
+            }
+            catch { }
+        }
+
         // ==================== 原有功能（保留+增强）====================
         public void UpdatePetToolTip()
         {
@@ -761,7 +803,7 @@ namespace DesktopPet
         }
         public void DoHandshake()
         {
-            if (intimacy >= MaxIntimacy) return;
+            if (!CanHandshake()) return;
             intimacy += 5;
             if (intimacy > MaxIntimacy) intimacy = MaxIntimacy;
             lastHandshake = DateTime.Now;
@@ -788,7 +830,7 @@ namespace DesktopPet
         }
         public void DoFeed()
         {
-            if (intimacy >= MaxIntimacy) return;
+            if (!CanFeed()) return;
             intimacy += 10;
             if (intimacy > MaxIntimacy) intimacy = MaxIntimacy;
             lastFeed = DateTime.Now;
@@ -1006,10 +1048,10 @@ namespace DesktopPet
         }
         public void ResetAllData()
         {
-            try { File.Delete(Path.Combine(Application.StartupPath, "pet_intimacy.txt")); } catch { }
-            try { File.Delete(Path.Combine(Application.StartupPath, "pet_name.txt")); } catch { }
-            try { File.Delete(Path.Combine(Application.StartupPath, "pet_handshake_cd.txt")); } catch { }
-            try { File.Delete(Path.Combine(Application.StartupPath, "pet_feed_cd.txt")); } catch { }
+            try { File.Delete(savePath); } catch { }
+            try { File.Delete(nameSavePath); } catch { }
+            try { File.Delete(handCdPath); } catch { }
+            try { File.Delete(feedCdPath); } catch { }
             try { File.Delete(statsPath); } catch { }
             try { File.Delete(Path.Combine(Application.StartupPath, "pet_achievements.txt")); } catch { }
             try { File.Delete(questsPath); } catch { }
@@ -1018,14 +1060,17 @@ namespace DesktopPet
             try { File.Delete(Path.Combine(Application.StartupPath, "pet_foodstock.txt")); } catch { }
             try { File.Delete(Path.Combine(Application.StartupPath, "pet_shoponly.txt")); } catch { }
             try { File.Delete(sokobanSavePath); } catch { }
+            try { File.Delete(flappySavePath); } catch { }
             intimacy = 0; petName = "小宠物"; currentSkinIndex = 0;
-            lastHandshake = DateTime.MinValue; lastFeed = DateTime.MinValue;
+            lastHandshake = DateTime.MinValue; lastFeed = DateTime.MinValue; patLastTime = DateTime.MinValue;
             unlockedAchievements.Clear(); totalHandshakes = 0; totalFeeds = 0; totalPats = 0;
-            crystals = 0; questProgress.Clear(); questClaimed.Clear(); milestoneProgress.Clear(); milestoneClaimed.Clear();
+            crystals = 0; questCompletedDate = ""; questProgress.Clear(); questClaimed.Clear(); milestoneProgress.Clear(); milestoneClaimed.Clear();
             for (int i = 0; i < foodStock.Length; i++) foodStock[i] = 0;
             for (int i = 0; i < shopOnlyPurchased.Length; i++) shopOnlyPurchased[i] = false;
             SokobanUnlockedLevel = 1;
             for (int i = 0; i < SokobanRewarded.Length; i++) SokobanRewarded[i] = false;
+            FlappyUnlockedLevel = 1;
+            for (int i = 0; i < FlappyRewarded.Length; i++) FlappyRewarded[i] = false;
             firstInteractionDate = DateTime.MinValue; lastInteractionDate = DateTime.Now;
             SaveIntimacy(); UpdatePetToolTip();
         }
@@ -1040,8 +1085,8 @@ namespace DesktopPet
         }
         private void LoadData()
         {
-            try { if (File.Exists(savePath)) { int s; if (int.TryParse(File.ReadAllText(savePath), out s)) intimacy = s; } if (File.Exists(nameSavePath)) { string n = File.ReadAllText(nameSavePath).Trim(); if (!string.IsNullOrEmpty(n)) petName = n; } } catch { }
-            UpdatePetToolTip(); LoadCd(); LoadStats(); LoadAchievements(); LoadQuests(); LoadCrystals(); LoadMilestoneQuests(); LoadFoodStock(); LoadShopOnly(); LoadSokobanProgress(); UpdateMood();
+            try { if (File.Exists(savePath)) { int s; if (int.TryParse(File.ReadAllText(savePath), out s)) intimacy = Math.Max(0, Math.Min(s, MaxIntimacy)); } if (File.Exists(nameSavePath)) { string n = File.ReadAllText(nameSavePath).Trim(); if (!string.IsNullOrEmpty(n)) petName = n; } } catch { }
+            UpdatePetToolTip(); LoadCd(); LoadStats(); LoadAchievements(); LoadQuests(); LoadCrystals(); LoadMilestoneQuests(); LoadFoodStock(); LoadShopOnly(); LoadSokobanProgress(); LoadFlappyProgress(); UpdateMood();
         }
 
         // ==================== 任务系统核心逻辑 ====================
@@ -1150,7 +1195,7 @@ namespace DesktopPet
                     string[] lines = File.ReadAllText(path).Split(',');
                     for (int i = 0; i < lines.Length && i < foodStock.Length; i++)
                     {
-                        int s; if (int.TryParse(lines[i], out s)) foodStock[i] = s;
+                        int s; if (int.TryParse(lines[i], out s)) foodStock[i] = Math.Max(0, Math.Min(s, foodMaxStock[i]));
                     }
                 }
                 catch { }
@@ -1227,13 +1272,15 @@ namespace DesktopPet
             if ((DateTime.Now - lastFeed).TotalHours < FeedCdHours) return false;
             int foodIdx = -1;
             for (int i = 0; i < foodDefs.Length; i++) { if (foodDefs[i].name == food.name) { foodIdx = i; break; } }
-            if (food.price > 0)
+            if (foodIdx < 0) return false;
+            FoodDef selectedFood = foodDefs[foodIdx];
+            if (selectedFood.price > 0)
             {
-                if (foodIdx >= 0 && foodStock[foodIdx] <= 0) return false;
-                if (foodIdx >= 0) { foodStock[foodIdx]--; SaveFoodStock(); }
+                if (foodStock[foodIdx] <= 0) return false;
+                foodStock[foodIdx]--; SaveFoodStock();
             }
 
-            intimacy += food.intimacy;
+            intimacy += selectedFood.intimacy;
             if (intimacy > MaxIntimacy) intimacy = MaxIntimacy;
             lastFeed = DateTime.Now;
             totalFeeds++; RecordInteraction();
@@ -1242,7 +1289,7 @@ namespace DesktopPet
             Random rnd = new Random();
             petToolTip.SetToolTip(this, feedReactions[rnd.Next(feedReactions.Length)]);
             reactionTimer.Start(); SaveIntimacy(); AnimateBounce();
-            ShowFloatingText("+" + food.intimacy, Color.FromArgb(100, 180, 120));
+            ShowFloatingText("+" + selectedFood.intimacy, Color.FromArgb(100, 180, 120));
             CheckMilestoneAchievements();
             if (detailsForm != null && !detailsForm.IsDisposed) detailsForm.RefreshUI();
             if (questForm != null && !questForm.IsDisposed) questForm.RefreshUI();
@@ -1280,8 +1327,13 @@ namespace DesktopPet
                         string[] parts = lines[i].Split('|');
                         if (parts.Length >= 3)
                         {
-                            questProgress[parts[0]] = int.Parse(parts[1]);
-                            questClaimed[parts[0]] = parts[2] == "1";
+                            int progress;
+                            QuestDef def = GetQuestDef(parts[0]);
+                            if (def.id != null && int.TryParse(parts[1], out progress))
+                            {
+                                questProgress[parts[0]] = Math.Max(0, Math.Min(progress, def.target));
+                                questClaimed[parts[0]] = parts[2] == "1";
+                            }
                         }
                     }
                 }
@@ -1300,7 +1352,7 @@ namespace DesktopPet
         }
         private void LoadCrystals()
         {
-            try { if (File.Exists(crystalsPath)) { int c; if (int.TryParse(File.ReadAllText(crystalsPath), out c)) crystals = c; } } catch { }
+            try { if (File.Exists(crystalsPath)) { int c; if (int.TryParse(File.ReadAllText(crystalsPath), out c)) crystals = Math.Max(0, c); } } catch { }
         }
 
         // ==================== 里程碑任务逻辑 ====================
@@ -1386,8 +1438,13 @@ namespace DesktopPet
                         string[] parts = lines[i].Split('|');
                         if (parts.Length >= 3)
                         {
-                            milestoneProgress[parts[0]] = int.Parse(parts[1]);
-                            milestoneClaimed[parts[0]] = parts[2] == "1";
+                            int progress;
+                            QuestDef def = GetMilestoneQuestDef(parts[0]);
+                            if (def.id != null && int.TryParse(parts[1], out progress))
+                            {
+                                milestoneProgress[parts[0]] = Math.Max(0, Math.Min(progress, def.target));
+                                milestoneClaimed[parts[0]] = parts[2] == "1";
+                            }
                         }
                     }
                 }
@@ -1476,6 +1533,21 @@ namespace DesktopPet
             }
         }
 
+        private static bool IsValidVersion(string value)
+        {
+            Version version;
+            return Version.TryParse(value, out version);
+        }
+
+        private static bool IsVersionNewer(string candidate, string baseline)
+        {
+            Version candidateVersion;
+            Version baselineVersion;
+            return Version.TryParse(candidate, out candidateVersion)
+                && Version.TryParse(baseline, out baselineVersion)
+                && candidateVersion.CompareTo(baselineVersion) > 0;
+        }
+
         static void CheckForUpdate()
         {
             System.Threading.Thread t = new System.Threading.Thread(delegate()
@@ -1498,9 +1570,9 @@ namespace DesktopPet
                             using (System.IO.StreamReader sr = new System.IO.StreamReader(resp.GetResponseStream()))
                             {
                                 string ver = sr.ReadToEnd().Trim();
-                                if (!string.IsNullOrEmpty(ver))
+                                if (IsValidVersion(ver))
                                 {
-                                    if (string.IsNullOrEmpty(remoteVersion) || string.Compare(ver, remoteVersion) > 0)
+                                    if (string.IsNullOrEmpty(remoteVersion) || IsVersionNewer(ver, remoteVersion))
                                         remoteVersion = ver;
                                 }
                             }
@@ -1508,7 +1580,7 @@ namespace DesktopPet
                         catch { }
                     }
                     if (string.IsNullOrEmpty(remoteVersion)) return;
-                    if (string.Compare(remoteVersion, CurrentVersion) <= 0) return;
+                    if (!IsVersionNewer(remoteVersion, CurrentVersion)) return;
 
                     DialogResult result = MessageBox.Show(
                         "发现新版本 v" + remoteVersion + "（当前 v" + CurrentVersion + "）\n\n是否立即下载更新？",
@@ -1673,6 +1745,256 @@ namespace DesktopPet
         }
     }
 
+    // ==================== 可爱风统一视觉主题 ====================
+    internal static class CuteTheme
+    {
+        public static readonly Color Cream = Color.FromArgb(255, 249, 246);
+        public static readonly Color Card = Color.FromArgb(255, 255, 255);
+        public static readonly Color Blush = Color.FromArgb(255, 226, 232);
+        public static readonly Color Peach = Color.FromArgb(255, 205, 184);
+        public static readonly Color Rose = Color.FromArgb(239, 137, 159);
+        public static readonly Color Lavender = Color.FromArgb(223, 211, 255);
+        public static readonly Color Mint = Color.FromArgb(183, 226, 206);
+        public static readonly Color Ink = Color.FromArgb(91, 69, 84);
+        public static readonly Color MutedInk = Color.FromArgb(151, 124, 138);
+
+        public static void Apply(Form form)
+        {
+            form.BackColor = Cream;
+            form.ControlAdded -= OnControlAdded;
+            form.ControlAdded += OnControlAdded;
+            form.Paint -= DrawFormBackground;
+            form.Paint += DrawFormBackground;
+            StyleControlTree(form);
+        }
+
+        public static void ApplyFloatingForm(Form form, int radius)
+        {
+            Apply(form);
+            form.SizeChanged -= OnRoundedControlSizeChanged;
+            form.SizeChanged += OnRoundedControlSizeChanged;
+            SetRoundedRegion(form, radius);
+        }
+
+        public static void StyleMenu(ContextMenuStrip menu)
+        {
+            menu.BackColor = Card;
+            menu.ForeColor = Ink;
+            menu.ShowImageMargin = false;
+            menu.Padding = new Padding(5, 4, 5, 4);
+            menu.Renderer = new CuteMenuRenderer();
+        }
+
+        private static void OnControlAdded(object sender, ControlEventArgs e)
+        {
+            StyleControlTree(e.Control);
+        }
+
+        private static void StyleControlTree(Control control)
+        {
+            if (control == null) return;
+
+            control.ControlAdded -= OnControlAdded;
+            control.ControlAdded += OnControlAdded;
+
+            Button button = control as Button;
+            if (button != null) StyleButton(button);
+
+            Panel panel = control as Panel;
+            if (panel != null && !(panel is FlowLayoutPanel) && ShouldRoundPanel(panel)) StylePanel(panel);
+
+            PictureBox picture = control as PictureBox;
+            if (picture != null && picture.Width == picture.Height && picture.Width >= 48)
+            {
+                picture.SizeChanged -= OnCircularPictureSizeChanged;
+                picture.SizeChanged += OnCircularPictureSizeChanged;
+                SetRoundedRegion(picture, picture.Width / 2);
+            }
+
+            TextBox textBox = control as TextBox;
+            if (textBox != null)
+            {
+                textBox.BackColor = Card;
+                textBox.ForeColor = Ink;
+                textBox.BorderStyle = BorderStyle.FixedSingle;
+            }
+
+            foreach (Control child in control.Controls)
+                StyleControlTree(child);
+        }
+
+        private static bool ShouldRoundPanel(Panel panel)
+        {
+            if (panel.BorderStyle == BorderStyle.FixedSingle) return true;
+            if (panel.BackColor.ToArgb() != Card.ToArgb()) return false;
+            return panel.Width >= 80 && panel.Height >= 28 && !panel.AutoScroll;
+        }
+
+        private static void StyleButton(Button button)
+        {
+            button.FlatStyle = FlatStyle.Flat;
+            button.FlatAppearance.BorderSize = 0;
+            button.UseVisualStyleBackColor = false;
+            button.Cursor = button.Enabled ? Cursors.Hand : Cursors.Default;
+
+            if (button.BackColor.ToArgb() == SystemColors.Control.ToArgb())
+                button.BackColor = Rose;
+            if (button.ForeColor.ToArgb() == SystemColors.ControlText.ToArgb())
+                button.ForeColor = Color.White;
+
+            if (button.BackColor == Color.Transparent)
+            {
+                button.FlatAppearance.MouseOverBackColor = Blush;
+                button.FlatAppearance.MouseDownBackColor = Peach;
+            }
+            else
+            {
+                button.FlatAppearance.MouseOverBackColor = Blend(button.BackColor, Color.White, 0.20f);
+                button.FlatAppearance.MouseDownBackColor = Blend(button.BackColor, Ink, 0.12f);
+            }
+
+            button.SizeChanged -= OnRoundedControlSizeChanged;
+            button.SizeChanged += OnRoundedControlSizeChanged;
+            SetRoundedRegion(button, Math.Min(15, Math.Max(8, button.Height / 3)));
+        }
+
+        private static void StylePanel(Panel panel)
+        {
+            panel.BorderStyle = BorderStyle.None;
+            panel.SizeChanged -= OnRoundedControlSizeChanged;
+            panel.SizeChanged += OnRoundedControlSizeChanged;
+            panel.Paint -= DrawCardBorder;
+            panel.Paint += DrawCardBorder;
+            SetRoundedRegion(panel, 14);
+        }
+
+        private static void OnRoundedControlSizeChanged(object sender, EventArgs e)
+        {
+            Control control = sender as Control;
+            if (control == null) return;
+            int radius = control is Button ? Math.Min(15, Math.Max(8, control.Height / 3)) : 14;
+            SetRoundedRegion(control, radius);
+        }
+
+        private static void OnCircularPictureSizeChanged(object sender, EventArgs e)
+        {
+            PictureBox picture = sender as PictureBox;
+            if (picture != null) SetRoundedRegion(picture, picture.Width / 2);
+        }
+
+        private static void SetRoundedRegion(Control control, int radius)
+        {
+            if (control.Width <= 1 || control.Height <= 1) return;
+            using (System.Drawing.Drawing2D.GraphicsPath path = CreateRoundedPath(new Rectangle(0, 0, control.Width, control.Height), radius))
+            {
+                Region previous = control.Region;
+                control.Region = new Region(path);
+                if (previous != null) previous.Dispose();
+            }
+        }
+
+        private static System.Drawing.Drawing2D.GraphicsPath CreateRoundedPath(Rectangle bounds, int radius)
+        {
+            System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath();
+            int diameter = Math.Min(radius * 2, Math.Min(bounds.Width, bounds.Height));
+            if (diameter <= 2)
+            {
+                path.AddRectangle(bounds);
+                return path;
+            }
+
+            Rectangle arc = new Rectangle(bounds.X, bounds.Y, diameter, diameter);
+            path.AddArc(arc, 180, 90);
+            arc.X = bounds.Right - diameter;
+            path.AddArc(arc, 270, 90);
+            arc.Y = bounds.Bottom - diameter;
+            path.AddArc(arc, 0, 90);
+            arc.X = bounds.Left;
+            path.AddArc(arc, 90, 90);
+            path.CloseFigure();
+            return path;
+        }
+
+        private static void DrawCardBorder(object sender, PaintEventArgs e)
+        {
+            Panel panel = sender as Panel;
+            if (panel == null || panel.Width < 3 || panel.Height < 3) return;
+            using (System.Drawing.Drawing2D.GraphicsPath path = CreateRoundedPath(new Rectangle(0, 0, panel.Width - 1, panel.Height - 1), 14))
+            using (Pen border = new Pen(Blend(panel.BackColor, Rose, 0.28f), 1))
+            {
+                e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                e.Graphics.DrawPath(border, path);
+            }
+        }
+
+        private static void DrawFormBackground(object sender, PaintEventArgs e)
+        {
+            Form form = sender as Form;
+            if (form == null) return;
+            e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            using (SolidBrush blushBrush = new SolidBrush(Blush))
+            using (SolidBrush lavenderBrush = new SolidBrush(Lavender))
+            using (SolidBrush peachBrush = new SolidBrush(Color.FromArgb(140, Peach)))
+            using (SolidBrush sparkleBrush = new SolidBrush(Color.FromArgb(180, Rose)))
+            {
+                e.Graphics.FillEllipse(blushBrush, -50, -35, 175, 115);
+                e.Graphics.FillEllipse(lavenderBrush, form.ClientSize.Width - 105, -42, 150, 105);
+                e.Graphics.FillEllipse(peachBrush, form.ClientSize.Width - 105, form.ClientSize.Height - 65, 145, 105);
+                DrawSparkle(e.Graphics, sparkleBrush, 18, form.ClientSize.Height - 28);
+                DrawSparkle(e.Graphics, sparkleBrush, form.ClientSize.Width - 30, 76);
+            }
+        }
+
+        private static void DrawSparkle(Graphics graphics, Brush brush, int x, int y)
+        {
+            graphics.FillEllipse(brush, x - 2, y - 8, 4, 16);
+            graphics.FillEllipse(brush, x - 8, y - 2, 16, 4);
+            graphics.FillEllipse(brush, x - 4, y - 4, 8, 8);
+        }
+
+        private static Color Blend(Color first, Color second, float amount)
+        {
+            amount = Math.Max(0.0f, Math.Min(1.0f, amount));
+            int r = (int)(first.R + (second.R - first.R) * amount);
+            int g = (int)(first.G + (second.G - first.G) * amount);
+            int b = (int)(first.B + (second.B - first.B) * amount);
+            return Color.FromArgb(first.A, r, g, b);
+        }
+
+        private sealed class CuteMenuRenderer : ToolStripProfessionalRenderer
+        {
+            protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
+            {
+                e.Graphics.Clear(Card);
+            }
+
+            protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
+            {
+                if (e.Item.Selected)
+                {
+                    using (SolidBrush brush = new SolidBrush(Blush))
+                        e.Graphics.FillRectangle(brush, new Rectangle(Point.Empty, e.Item.Size));
+                }
+            }
+
+            protected override void OnRenderItemText(ToolStripItemTextRenderEventArgs e)
+            {
+                e.TextColor = Ink;
+                base.OnRenderItemText(e);
+            }
+
+            protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
+            {
+                using (Pen pen = new Pen(Peach))
+                    e.Graphics.DrawLine(pen, 8, e.Item.Height / 2, e.Item.Width - 8, e.Item.Height / 2);
+            }
+
+            protected override void OnRenderToolStripBorder(ToolStripRenderEventArgs e)
+            {
+            }
+        }
+    }
+
     // ==================== 宠物面板界面（增强版）====================
     public class PetDetailsForm : Form
     {
@@ -1684,7 +2006,6 @@ namespace DesktopPet
         private Label handCdLabel, feedCdLabel;
         private Timer animTimer; private int animStep; private Point petPicOriginal; private bool animClap;
         private Panel foodPanel;
-        private bool showingFoodPanel = false;
 
         public PetDetailsForm(PetForm owner)
         {
@@ -1704,12 +2025,21 @@ namespace DesktopPet
             mp.Items.Add("查看成就", null, (s, e) => pet.OpenAchievements(s, e));
             mp.Items.Add("任务系统", null, (s, e) => pet.OpenQuests(s, e));
             mp.Items.Add("-", null, null); mp.Items.Add("重新领养", null, (s, e) => ShowResetAdoptDialog());
+            CuteTheme.StyleMenu(mp);
             menuBtn.Click += (s, e) => mp.Show(menuBtn, new Point(0, menuBtn.Height)); this.Controls.Add(menuBtn);
 
             petPic = new PictureBox(); petPic.Size = new Size(130, 130); petPic.Location = new Point(115, 55);
             petPic.BackColor = Color.White; petPic.SizeMode = PictureBoxSizeMode.Zoom;
             string imgPath = Path.Combine(Application.StartupPath, "微信图片_20260711143702_6_2.jpg");
-            try { using (FileStream fs = new FileStream(imgPath, FileMode.Open, FileAccess.Read)) { petPic.Image = Image.FromStream(fs); } } catch { petPic.BackColor = Color.Coral; }
+            try
+            {
+                using (FileStream fs = new FileStream(imgPath, FileMode.Open, FileAccess.Read))
+                using (Image source = Image.FromStream(fs))
+                {
+                    petPic.Image = new Bitmap(source);
+                }
+            }
+            catch { petPic.BackColor = Color.Coral; }
             this.Controls.Add(petPic); petPicOriginal = petPic.Location;
 
             petNameLabel = new Label(); petNameLabel.Text = pet.PetName; petNameLabel.Font = new Font("Microsoft YaHei", 14, FontStyle.Bold);
@@ -1809,12 +2139,12 @@ namespace DesktopPet
             foodPanel.Visible = false;
             this.Controls.Add(foodPanel);
 
+            CuteTheme.Apply(this);
             RefreshUI();
         }
 
         private void ShowFoodPanel()
         {
-            showingFoodPanel = true;
             handBtn.Visible = false; feedBtn.Visible = false;
             handCdLabel.Visible = false; feedCdLabel.Visible = false;
             // 隐藏底部所有控件
@@ -1828,7 +2158,6 @@ namespace DesktopPet
 
         private void HideFoodPanel()
         {
-            showingFoodPanel = false;
             foodPanel.Visible = false;
             foodPanel.Controls.Clear();
             handBtn.Visible = true; feedBtn.Visible = true;
@@ -1981,7 +2310,7 @@ namespace DesktopPet
             Button ok = new Button(); ok.Text = "确定"; ok.Location = new Point(190, 49); ok.Size = new Size(60, 28);
             ok.BackColor = pet.GetCurrentSkinPrimaryColor(); ok.ForeColor = Color.White; ok.FlatStyle = FlatStyle.Flat; ok.FlatAppearance.BorderSize = 0;
             ok.Font = new Font("Microsoft YaHei", 9);
-            ok.Click += (s, ev) => { string n = txt.Text.Trim(); if (!string.IsNullOrEmpty(n)) { pet.PetName = n; pet.UpdatePetToolTip(); SavePetName(); RefreshUI(); pet.CheckAndUnlockAchievement("rename"); } rf.Close(); }; rf.Controls.Add(ok); rf.ShowDialog(this);
+            ok.Click += (s, ev) => { string n = txt.Text.Trim(); if (!string.IsNullOrEmpty(n)) { pet.PetName = n; pet.UpdatePetToolTip(); SavePetName(); RefreshUI(); pet.CheckAndUnlockAchievement("rename"); } rf.Close(); }; rf.Controls.Add(ok); CuteTheme.Apply(rf); rf.ShowDialog(this);
         }
         private void ShowResetAdoptDialog()
         {
@@ -2004,6 +2333,7 @@ namespace DesktopPet
             Timer countdown = new Timer(); countdown.Interval = 1000; int remaining = 3;
             countdown.Tick += (s, ev) => { remaining--; if (remaining <= 0) { countdown.Stop(); confirmBtn.Enabled = true; confirmBtn.Text = "确认领养"; confirmBtn.BackColor = Color.FromArgb(220, 80, 60); } else { confirmBtn.Text = "确认领养 (" + remaining + "s)"; } };
             countdown.Start();
+            CuteTheme.Apply(dlg);
             dlg.ShowDialog(this);
         }
         private void StartClapAnim() { animStep = 0; animClap = true; petPicOriginal = petPic.Location; animTimer.Start(); }
@@ -2054,6 +2384,7 @@ namespace DesktopPet
             CreateStatRow("😊 当前心情", pet.GetCurrentMoodEmoji() + " " + pet.GetCurrentMoodDescription(), 340);
             Button cb = new Button(); cb.Text = "关闭"; cb.Location = new Point(120, 380); cb.Size = new Size(100, 32); cb.BackColor = pet.GetCurrentSkinPrimaryColor(); cb.ForeColor = Color.White; cb.FlatStyle = FlatStyle.Flat; cb.FlatAppearance.BorderSize = 0; cb.Font = new Font("Microsoft YaHei", 9); cb.Click += (s, e) => { this.Hide(); }; this.Controls.Add(cb);
             this.FormClosing += (s, e) => { this.Hide(); e.Cancel = true; };
+            CuteTheme.Apply(this);
         }
         public void RefreshData()
         {
@@ -2096,6 +2427,7 @@ namespace DesktopPet
             RefreshList();
             Button cb = new Button(); cb.Text = "关闭"; cb.Location = new Point(140, 485); cb.Size = new Size(100, 30); cb.BackColor = pet.GetCurrentSkinPrimaryColor(); cb.ForeColor = Color.White; cb.FlatStyle = FlatStyle.Flat; cb.FlatAppearance.BorderSize = 0; cb.Font = new Font("Microsoft YaHei", 9); cb.Click += (s, e) => { this.Hide(); }; this.Controls.Add(cb);
             this.FormClosing += (s, e) => { this.Hide(); e.Cancel = true; };
+            CuteTheme.Apply(this);
         }
         public void RefreshList()
         {
@@ -2137,6 +2469,7 @@ namespace DesktopPet
             feedBtn.Click += (s, e) => { if (pet.CanFeed()) { ShowFoodPanel(); } }; inner.Controls.Add(feedBtn);
             handCdLabel = new Label(); handCdLabel.Location = new Point(5, 50); handCdLabel.Size = new Size(60, 16); handCdLabel.TextAlign = ContentAlignment.MiddleCenter; handCdLabel.Font = new Font("Microsoft YaHei", 7); handCdLabel.ForeColor = Color.FromArgb(160, 140, 130); inner.Controls.Add(handCdLabel);
             feedCdLabel = new Label(); feedCdLabel.Location = new Point(71, 50); feedCdLabel.Size = new Size(60, 16); feedCdLabel.TextAlign = ContentAlignment.MiddleCenter; feedCdLabel.Font = new Font("Microsoft YaHei", 7); feedCdLabel.ForeColor = Color.FromArgb(160, 140, 130); inner.Controls.Add(feedCdLabel);
+            CuteTheme.ApplyFloatingForm(this, 16);
             RefreshState();
         }
         private void ShowFoodPanel()
@@ -2395,6 +2728,7 @@ namespace DesktopPet
             closeBtn.Click += (s, e) => { this.Close(); };
             this.Controls.Add(closeBtn);
 
+            CuteTheme.Apply(this);
             RefreshUI();
         }
 
@@ -2608,11 +2942,13 @@ namespace DesktopPet
             this.ShowInTaskbar = false;
             this.StartPosition = FormStartPosition.Manual;
             this.Size = new Size(52, 52);
-            this.BackColor = Color.FromArgb(100, 170, 235);
+            this.BackColor = Color.FromArgb(239, 137, 159);
 
-            System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath();
-            path.AddEllipse(0, 0, 52, 52);
-            this.Region = new Region(path);
+            using (System.Drawing.Drawing2D.GraphicsPath path = new System.Drawing.Drawing2D.GraphicsPath())
+            {
+                path.AddEllipse(0, 0, 52, 52);
+                this.Region = new Region(path);
+            }
 
             this.Paint += OnPaint;
             this.Click += (s, e) => { pet.OpenDetails(this, EventArgs.Empty); this.Hide(); };
@@ -2624,15 +2960,15 @@ namespace DesktopPet
         {
             e.Graphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
 
-            // 主体蓝色渐变圆
+            // 主体粉彩渐变圆
             using (System.Drawing.Drawing2D.GraphicsPath body = new System.Drawing.Drawing2D.GraphicsPath())
             {
                 body.AddEllipse(0, 0, 52, 52);
                 using (System.Drawing.Drawing2D.PathGradientBrush brush = new System.Drawing.Drawing2D.PathGradientBrush(body))
                 {
                     brush.CenterPoint = new PointF(18, 16);
-                    brush.CenterColor = Color.FromArgb(250, 200, 225, 255);
-                    brush.SurroundColors = new Color[] { Color.FromArgb(240, 100, 170, 235) };
+                    brush.CenterColor = Color.FromArgb(255, 250, 238, 248);
+                    brush.SurroundColors = new Color[] { Color.FromArgb(245, 239, 137, 159) };
                     e.Graphics.FillEllipse(brush, 0, 0, 52, 52);
                 }
             }
@@ -2653,7 +2989,10 @@ namespace DesktopPet
             {
                 sf.Alignment = StringAlignment.Center;
                 sf.LineAlignment = StringAlignment.Center;
-                e.Graphics.DrawString("宠物面板", f, new SolidBrush(Color.FromArgb(230, 35, 65, 115)), new RectangleF(0, 1, 52, 52), sf);
+                using (SolidBrush textBrush = new SolidBrush(CuteTheme.Ink))
+                {
+                    e.Graphics.DrawString("宠物面板", f, textBrush, new RectangleF(0, 1, 52, 52), sf);
+                }
             }
         }
     }
@@ -2673,7 +3012,7 @@ namespace DesktopPet
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
             this.StartPosition = FormStartPosition.CenterScreen;
-            this.BackColor = Color.FromArgb(255, 252, 245);
+            this.BackColor = CuteTheme.Cream;
             this.Font = new Font("Microsoft YaHei", 9);
             try { this.Icon = new Icon(Path.Combine(Application.StartupPath, "app_icon.ico")); } catch { }
 
@@ -2722,6 +3061,7 @@ namespace DesktopPet
             this.Controls.Add(closeBtn);
 
             this.FormClosing += (s, e) => { this.Hide(); e.Cancel = true; };
+            CuteTheme.Apply(this);
             RefreshUI();
         }
 
@@ -2930,11 +3270,24 @@ namespace DesktopPet
     }
 
     // ==================== 统一游戏界面 ====================
+    // 启用双缓冲的 Panel，消除频繁重绘时的闪烁
+    public class DoubleBufferedPanel : Panel
+    {
+        public DoubleBufferedPanel()
+        {
+            this.DoubleBuffered = true;
+            this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
+            this.UpdateStyles();
+        }
+    }
+
     public class GameForm : Form
     {
         private PetForm pet;
         private enum State { SelectGame, SelectLevel, Playing }
+        private enum GameType { Sokoban, FlappyBird }
         private State currentState = State.SelectGame;
+        private GameType selectedGame = GameType.Sokoban;
         private Panel topBar, contentPanel;
         private Label titleLabel;
         private Button backBtn;
@@ -2946,9 +3299,34 @@ namespace DesktopPet
         private int playerX, playerY;
         private int gridRows, gridCols;
         private const int CellSize = 56;
-        private Panel gamePanel;
+        private DoubleBufferedPanel gamePanel;
         private Label crystalLabel, statusLabel;
         private Button resetBtn;
+        private bool levelComplete;
+
+        // 宠物飞飞状态
+        private Timer flappyTimer;
+        private Random flappyRandom = new Random();
+        private Button flapBtn;
+        private float flappyBirdY;
+        private float flappyBirdVelocity;
+        private float flappyPipeX;
+        private int flappyGapY;
+        private int flappyGapHeight;
+        private int flappySpeed;
+        private int flappyTarget;
+        private int flappyPassed;
+        private int flappyWingFrame;
+        private bool flappyPipePassed;
+        private bool flappyRunning;
+        private bool flappyGameOver;
+        private bool flappyComplete;
+        private const int FlappyBirdX = 92;
+        private const int FlappyPipeWidth = 58;
+        private static int[] flappyRewards = new int[] { 0, 8, 15, 25, 40, 60, 85, 115, 150, 190, 240 };
+        private static int[] flappyTargets = new int[] { 0, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 };
+        private static int[] flappyGaps = new int[] { 0, 160, 150, 142, 134, 126, 118, 110, 104, 98, 92 };
+        private static int[] flappySpeeds = new int[] { 0, 3, 3, 4, 4, 4, 5, 5, 5, 6, 6 };
 
         private static int[][,] levels = new int[10][,]
         {
@@ -2983,15 +3361,28 @@ namespace DesktopPet
             {
                 string imgPath = System.IO.Path.Combine(Application.StartupPath, "微信图片_20260711143702_6_2.jpg");
                 using (System.IO.FileStream fs = new System.IO.FileStream(imgPath, System.IO.FileMode.Open, System.IO.FileAccess.Read))
-                { petImage = Image.FromStream(fs); }
+                using (Image source = Image.FromStream(fs))
+                {
+                    petImage = new Bitmap(source);
+                }
             }
             catch { }
+
+            this.FormClosed += (s, e) =>
+            {
+                StopFlappyGame();
+                if (flappyTimer != null) flappyTimer.Dispose();
+                if (petImage != null) petImage.Dispose();
+            };
+            flappyTimer = new Timer();
+            flappyTimer.Interval = 20;
+            flappyTimer.Tick += FlappyTimer_Tick;
 
             // 顶部栏
             topBar = new Panel();
             topBar.Location = new Point(0, 0);
             topBar.Size = new Size(410, 44);
-            topBar.BackColor = Color.FromArgb(240, 235, 225);
+            topBar.BackColor = CuteTheme.Lavender;
             this.Controls.Add(topBar);
 
             backBtn = new Button();
@@ -3019,16 +3410,22 @@ namespace DesktopPet
             contentPanel = new Panel();
             contentPanel.Location = new Point(0, 44);
             contentPanel.Size = new Size(410, 615);
-            contentPanel.BackColor = Color.FromArgb(255, 252, 245);
+            contentPanel.BackColor = CuteTheme.Cream;
             contentPanel.AutoScroll = true;
             this.Controls.Add(contentPanel);
 
             ShowSelectGame();
+            CuteTheme.Apply(this);
         }
 
         private void ClearContent()
         {
-            contentPanel.Controls.Clear();
+            for (int i = contentPanel.Controls.Count - 1; i >= 0; i--)
+            {
+                Control control = contentPanel.Controls[i];
+                contentPanel.Controls.RemoveAt(i);
+                control.Dispose();
+            }
         }
 
         private void GoBack()
@@ -3036,7 +3433,10 @@ namespace DesktopPet
             if (currentState == State.SelectLevel)
                 ShowSelectGame();
             else if (currentState == State.Playing)
+            {
+                StopFlappyGame();
                 ShowSelectLevel();
+            }
         }
 
         // ==================== 选择游戏 ====================
@@ -3105,7 +3505,64 @@ namespace DesktopPet
             playBtn.Location = new Point(80, 95);
             playBtn.Size = new Size(150, 35);
             playBtn.Cursor = Cursors.Hand;
-            playBtn.Click += (s, e) => ShowSelectLevel();
+            playBtn.Click += (s, e) => { selectedGame = GameType.Sokoban; ShowSelectLevel(); };
+            card.Controls.Add(playBtn);
+
+            CreateFlappyGameCard();
+        }
+
+        private void CreateFlappyGameCard()
+        {
+            Panel card = new Panel();
+            card.Location = new Point(20, 200);
+            card.Size = new Size(370, 155);
+            card.BackColor = Color.FromArgb(255, 250, 253);
+            card.BorderStyle = BorderStyle.FixedSingle;
+            contentPanel.Controls.Add(card);
+
+            Label icon = new Label();
+            icon.Text = "🐾";
+            icon.Font = new Font("Segoe UI Emoji", 31);
+            icon.Location = new Point(15, 16);
+            icon.Size = new Size(55, 55);
+            icon.TextAlign = ContentAlignment.MiddleCenter;
+            card.Controls.Add(icon);
+
+            Label gameName = new Label();
+            gameName.Text = "宠物飞飞";
+            gameName.Font = new Font("Microsoft YaHei", 13, FontStyle.Bold);
+            gameName.ForeColor = CuteTheme.Ink;
+            gameName.Location = new Point(80, 16);
+            gameName.Size = new Size(180, 28);
+            card.Controls.Add(gameName);
+
+            Label gameDesc = new Label();
+            gameDesc.Text = "点击画面或按空格，让宠物拍翅飞过云朵障碍！";
+            gameDesc.Font = new Font("Microsoft YaHei", 8);
+            gameDesc.ForeColor = CuteTheme.MutedInk;
+            gameDesc.Location = new Point(80, 47);
+            gameDesc.Size = new Size(270, 36);
+            card.Controls.Add(gameDesc);
+
+            Label rewardInfo = new Label();
+            rewardInfo.Text = "1–10 关逐步加速，首次通关可获得水晶";
+            rewardInfo.Font = new Font("Microsoft YaHei", 8);
+            rewardInfo.ForeColor = Color.FromArgb(196, 120, 151);
+            rewardInfo.Location = new Point(80, 82);
+            rewardInfo.Size = new Size(270, 20);
+            card.Controls.Add(rewardInfo);
+
+            Button playBtn = new Button();
+            playBtn.Text = "选择关卡";
+            playBtn.Font = new Font("Microsoft YaHei", 10, FontStyle.Bold);
+            playBtn.FlatStyle = FlatStyle.Flat;
+            playBtn.FlatAppearance.BorderSize = 0;
+            playBtn.BackColor = Color.FromArgb(120, 180, 120);
+            playBtn.ForeColor = Color.White;
+            playBtn.Location = new Point(80, 112);
+            playBtn.Size = new Size(150, 34);
+            playBtn.Cursor = Cursors.Hand;
+            playBtn.Click += (s, e) => { selectedGame = GameType.FlappyBird; ShowSelectLevel(); };
             card.Controls.Add(playBtn);
         }
 
@@ -3114,16 +3571,16 @@ namespace DesktopPet
         {
             currentState = State.SelectLevel;
             ClearContent();
-            titleLabel.Text = "选择关卡";
+            titleLabel.Text = selectedGame == GameType.FlappyBird ? "宠物飞飞 · 选择关卡" : "推箱子 · 选择关卡";
             backBtn.Visible = true;
 
-            int[] rewards = new int[] { 0, 10, 20, 30, 50, 80, 120, 150, 200, 250, 300 };
+            int[] rewards = selectedGame == GameType.FlappyBird ? flappyRewards : levelRewards;
 
             for (int i = 1; i <= 10; i++)
             {
                 int level = i;
-                bool unlocked = level <= pet.SokobanUnlockedLevel;
-                bool rewarded = pet.SokobanRewarded[level];
+                bool unlocked = selectedGame == GameType.FlappyBird ? level <= pet.FlappyUnlockedLevel : level <= pet.SokobanUnlockedLevel;
+                bool rewarded = selectedGame == GameType.FlappyBird ? pet.FlappyRewarded[level] : pet.SokobanRewarded[level];
 
                 Panel card = new Panel();
                 card.Location = new Point(15, 10 + (level - 1) * 62);
@@ -3142,7 +3599,7 @@ namespace DesktopPet
                 card.Controls.Add(numLabel);
 
                 Label infoLabel = new Label();
-                infoLabel.Text = "第" + level + "关";
+                infoLabel.Text = selectedGame == GameType.FlappyBird ? "飞飞 · 第" + level + "关" : "第" + level + "关";
                 if (rewarded) infoLabel.Text += "  \u2714\uFE0F";
                 infoLabel.Font = new Font("Microsoft YaHei", 11, FontStyle.Bold);
                 infoLabel.ForeColor = unlocked ? Color.FromArgb(80, 50, 40) : Color.FromArgb(180, 170, 160);
@@ -3178,6 +3635,13 @@ namespace DesktopPet
         // ==================== 推箱子游戏 ====================
         private void StartLevel(int level)
         {
+            if (selectedGame == GameType.FlappyBird)
+            {
+                StartFlappyLevel(level);
+                return;
+            }
+
+            StopFlappyGame();
             currentState = State.Playing;
             currentLevel = level;
             ClearContent();
@@ -3185,10 +3649,10 @@ namespace DesktopPet
             backBtn.Visible = true;
 
             // 游戏面板
-            gamePanel = new Panel();
+            gamePanel = new DoubleBufferedPanel();
             gamePanel.Location = new Point(10, 5);
             gamePanel.Size = new Size(390, 390);
-            gamePanel.BackColor = Color.FromArgb(245, 240, 230);
+            gamePanel.BackColor = Color.FromArgb(255, 244, 248);
             gamePanel.BorderStyle = BorderStyle.FixedSingle;
             gamePanel.Paint += GamePanel_Paint;
             contentPanel.Controls.Add(gamePanel);
@@ -3229,6 +3693,210 @@ namespace DesktopPet
             LoadLevel(level);
         }
 
+        // ==================== 宠物飞飞 ====================
+        private void StartFlappyLevel(int level)
+        {
+            StopFlappyGame();
+            currentState = State.Playing;
+            currentLevel = level;
+            ClearContent();
+            titleLabel.Text = "宠物飞飞 - 第" + level + "关";
+            backBtn.Visible = true;
+
+            gamePanel = new DoubleBufferedPanel();
+            gamePanel.Location = new Point(10, 5);
+            gamePanel.Size = new Size(390, 390);
+            gamePanel.BackColor = Color.FromArgb(236, 244, 255);
+            gamePanel.BorderStyle = BorderStyle.FixedSingle;
+            gamePanel.Paint += GamePanel_Paint;
+            gamePanel.MouseDown += (s, e) => FlapBird();
+            contentPanel.Controls.Add(gamePanel);
+
+            statusLabel = new Label();
+            statusLabel.Font = new Font("Microsoft YaHei", 10, FontStyle.Bold);
+            statusLabel.ForeColor = CuteTheme.Rose;
+            statusLabel.Location = new Point(10, 398);
+            statusLabel.Size = new Size(390, 20);
+            statusLabel.TextAlign = ContentAlignment.MiddleCenter;
+            contentPanel.Controls.Add(statusLabel);
+
+            flapBtn = new Button();
+            flapBtn.Text = "拍翅飞！";
+            flapBtn.Font = new Font("Microsoft YaHei", 9, FontStyle.Bold);
+            flapBtn.BackColor = CuteTheme.Rose;
+            flapBtn.ForeColor = Color.White;
+            flapBtn.Location = new Point(78, 425);
+            flapBtn.Size = new Size(120, 34);
+            flapBtn.Click += (s, e) => FlapBird();
+            contentPanel.Controls.Add(flapBtn);
+
+            resetBtn = new Button();
+            resetBtn.Text = "重新开始";
+            resetBtn.Font = new Font("Microsoft YaHei", 9, FontStyle.Bold);
+            resetBtn.BackColor = CuteTheme.Lavender;
+            resetBtn.ForeColor = CuteTheme.Ink;
+            resetBtn.Location = new Point(210, 425);
+            resetBtn.Size = new Size(120, 34);
+            resetBtn.Click += (s, e) => LoadFlappyLevel(currentLevel);
+            contentPanel.Controls.Add(resetBtn);
+
+            bool rewarded = pet.FlappyRewarded[level];
+            crystalLabel = new Label();
+            crystalLabel.Font = new Font("Microsoft YaHei", 8);
+            crystalLabel.ForeColor = rewarded ? Color.FromArgb(100, 160, 100) : Color.FromArgb(196, 120, 151);
+            crystalLabel.Text = rewarded ? "奖励已领取" : ("首次通关奖励: " + flappyRewards[level] + " 💎");
+            crystalLabel.Location = new Point(10, 468);
+            crystalLabel.Size = new Size(390, 20);
+            crystalLabel.TextAlign = ContentAlignment.MiddleCenter;
+            contentPanel.Controls.Add(crystalLabel);
+
+            LoadFlappyLevel(level);
+        }
+
+        private void LoadFlappyLevel(int level)
+        {
+            if (gamePanel == null || gamePanel.IsDisposed) return;
+            StopFlappyGame();
+            flappyGapHeight = flappyGaps[level];
+            flappySpeed = flappySpeeds[level];
+            flappyTarget = flappyTargets[level];
+            flappyBirdY = gamePanel.Height / 2.0f;
+            flappyBirdVelocity = 0;
+            flappyPassed = 0;
+            flappyWingFrame = 0;
+            flappyPipePassed = false;
+            flappyGameOver = false;
+            flappyComplete = false;
+            ResetFlappyPipe();
+            flappyRunning = true;
+            if (flapBtn != null) { flapBtn.Enabled = true; flapBtn.Text = "拍翅飞！"; }
+            statusLabel.Text = "点击画面或按空格拍翅 · 飞过 " + flappyTarget + " 个云朵门";
+            statusLabel.ForeColor = CuteTheme.MutedInk;
+            flappyTimer.Start();
+            gamePanel.Focus();
+            gamePanel.Invalidate();
+        }
+
+        private void StopFlappyGame()
+        {
+            flappyRunning = false;
+            if (flappyTimer != null) flappyTimer.Stop();
+        }
+
+        private void ResetFlappyPipe()
+        {
+            int minGapY = 48;
+            int maxGapY = gamePanel.Height - flappyGapHeight - 48;
+            if (maxGapY <= minGapY) maxGapY = minGapY + 1;
+            flappyGapY = flappyRandom.Next(minGapY, maxGapY);
+            flappyPipeX = gamePanel.Width + 36;
+            flappyPipePassed = false;
+        }
+
+        private void FlapBird()
+        {
+            if (selectedGame != GameType.FlappyBird) return;
+            if (flappyGameOver)
+            {
+                LoadFlappyLevel(currentLevel);
+                return;
+            }
+            if (!flappyRunning || flappyComplete) return;
+            flappyBirdVelocity = -5.9f;
+            flappyWingFrame += 3;
+            statusLabel.Text = "加油！还差 " + Math.Max(0, flappyTarget - flappyPassed) + " 个云朵门";
+            gamePanel.Invalidate();
+        }
+
+        private void FlappyTimer_Tick(object sender, EventArgs e)
+        {
+            if (!flappyRunning || gamePanel == null || gamePanel.IsDisposed) return;
+
+            flappyWingFrame++;
+            flappyBirdVelocity += 0.28f + currentLevel * 0.008f;
+            flappyBirdY += flappyBirdVelocity;
+            flappyPipeX -= flappySpeed;
+
+            float birdLeft = FlappyBirdX - 21;
+            float birdRight = FlappyBirdX + 21;
+            bool hitsPipe = birdRight > flappyPipeX && birdLeft < flappyPipeX + FlappyPipeWidth
+                && (flappyBirdY - 20 < flappyGapY || flappyBirdY + 20 > flappyGapY + flappyGapHeight);
+            bool hitsBorder = flappyBirdY - 20 < 0 || flappyBirdY + 20 > gamePanel.Height;
+            if (hitsPipe || hitsBorder)
+            {
+                EndFlappyGame();
+                return;
+            }
+
+            if (!flappyPipePassed && flappyPipeX + FlappyPipeWidth < birdLeft)
+            {
+                flappyPipePassed = true;
+                flappyPassed++;
+                if (flappyPassed >= flappyTarget)
+                {
+                    OnFlappyLevelComplete();
+                    return;
+                }
+                ResetFlappyPipe();
+            }
+
+            gamePanel.Invalidate();
+        }
+
+        private void EndFlappyGame()
+        {
+            flappyRunning = false;
+            flappyGameOver = true;
+            flappyTimer.Stop();
+            statusLabel.Text = "哎呀，撞到云朵门啦！点击“再飞一次”继续。";
+            statusLabel.ForeColor = Color.FromArgb(215, 104, 120);
+            if (flapBtn != null) flapBtn.Text = "再飞一次";
+            if (gamePanel != null) gamePanel.Invalidate();
+        }
+
+        private void OnFlappyLevelComplete()
+        {
+            if (flappyComplete) return;
+            flappyComplete = true;
+            flappyRunning = false;
+            flappyTimer.Stop();
+            int completedLevel = currentLevel;
+            statusLabel.Text = "飞过所有云朵门，完美通关！";
+            statusLabel.ForeColor = Color.FromArgb(91, 170, 125);
+            if (flapBtn != null) flapBtn.Enabled = false;
+
+            if (!pet.FlappyRewarded[completedLevel])
+            {
+                pet.FlappyRewarded[completedLevel] = true;
+                pet.AddCrystals(flappyRewards[completedLevel]);
+                pet.SaveFlappyProgress();
+                statusLabel.Text = "完美通关！获得 " + flappyRewards[completedLevel] + " 💎";
+                if (crystalLabel != null) crystalLabel.Text = "已获得 " + flappyRewards[completedLevel] + " 💎！";
+            }
+
+            if (completedLevel < 10 && pet.FlappyUnlockedLevel <= completedLevel)
+            {
+                pet.FlappyUnlockedLevel = completedLevel + 1;
+                pet.SaveFlappyProgress();
+            }
+
+            if (completedLevel < 10)
+            {
+                Timer advance = new Timer();
+                advance.Interval = 1500;
+                advance.Tick += (s, e) =>
+                {
+                    advance.Stop();
+                    advance.Dispose();
+                    if (!IsDisposed && currentState == State.Playing && selectedGame == GameType.FlappyBird && flappyComplete && currentLevel == completedLevel)
+                        StartFlappyLevel(completedLevel + 1);
+                };
+                advance.Start();
+            }
+
+            if (gamePanel != null) gamePanel.Invalidate();
+        }
+
         private void LoadLevel(int level)
         {
             int[,] template = levels[level - 1];
@@ -3241,12 +3909,18 @@ namespace DesktopPet
                 for (int c = 0; c < gridCols; c++)
                     if (grid[r, c] == 4) { playerX = c; playerY = r; }
 
+            levelComplete = false;
             statusLabel.Text = "";
             if (gamePanel != null) gamePanel.Refresh();
         }
 
         private void GamePanel_Paint(object sender, PaintEventArgs e)
         {
+            if (selectedGame == GameType.FlappyBird)
+            {
+                DrawFlappyScene(e.Graphics);
+                return;
+            }
             if (grid == null) return;
             Graphics g = e.Graphics;
             g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
@@ -3254,51 +3928,182 @@ namespace DesktopPet
             int offsetX = (gamePanel.Width - gridCols * CellSize) / 2;
             int offsetY = (gamePanel.Height - gridRows * CellSize) / 2;
 
-            for (int r = 0; r < gridRows; r++)
+            using (SolidBrush wallBrush = new SolidBrush(Color.FromArgb(237, 187, 202)))
+            using (SolidBrush floorBrush = new SolidBrush(Color.FromArgb(255, 249, 246)))
+            using (SolidBrush targetBrush = new SolidBrush(Color.FromArgb(226, 213, 255)))
+            using (SolidBrush boxBrush = new SolidBrush(Color.FromArgb(244, 176, 190)))
+            using (SolidBrush completedBoxBrush = new SolidBrush(Color.FromArgb(168, 220, 190)))
+            using (SolidBrush playerFallbackBrush = new SolidBrush(Color.FromArgb(134, 205, 235)))
+            using (Pen boxBorderPen = new Pen(Color.FromArgb(210, 125, 150), 2))
+            using (Pen boxLinePen = new Pen(Color.FromArgb(210, 125, 150), 1))
+            using (Pen completedBoxBorderPen = new Pen(Color.FromArgb(101, 178, 139), 2))
             {
-                for (int c = 0; c < gridCols; c++)
+                for (int r = 0; r < gridRows; r++)
                 {
-                    int x = offsetX + c * CellSize;
-                    int y = offsetY + r * CellSize;
-                    int cell = grid[r, c];
+                    for (int c = 0; c < gridCols; c++)
+                    {
+                        int x = offsetX + c * CellSize;
+                        int y = offsetY + r * CellSize;
+                        int cell = grid[r, c];
 
-                    if (cell == 1)
-                        g.FillRectangle(new SolidBrush(Color.FromArgb(140, 120, 100)), x, y, CellSize, CellSize);
-                    else
-                    {
-                        g.FillRectangle(new SolidBrush(Color.FromArgb(245, 240, 230)), x, y, CellSize, CellSize);
-                        if (cell == 2 || cell == 6)
-                            g.FillEllipse(new SolidBrush(Color.FromArgb(255, 200, 180)), x + 12, y + 12, CellSize - 24, CellSize - 24);
-                    }
-
-                    if (cell == 3)
-                    {
-                        g.FillRectangle(new SolidBrush(Color.FromArgb(180, 140, 100)), x + 6, y + 6, CellSize - 12, CellSize - 12);
-                        g.DrawRectangle(new Pen(Color.FromArgb(140, 100, 60), 2), x + 6, y + 6, CellSize - 12, CellSize - 12);
-                        g.DrawLine(new Pen(Color.FromArgb(140, 100, 60), 1), x + CellSize / 2, y + 8, x + CellSize / 2, y + CellSize - 8);
-                        g.DrawLine(new Pen(Color.FromArgb(140, 100, 60), 1), x + 8, y + CellSize / 2, x + CellSize - 8, y + CellSize / 2);
-                    }
-                    else if (cell == 5)
-                    {
-                        g.FillRectangle(new SolidBrush(Color.FromArgb(100, 180, 120)), x + 6, y + 6, CellSize - 12, CellSize - 12);
-                        g.DrawRectangle(new Pen(Color.FromArgb(60, 140, 80), 2), x + 6, y + 6, CellSize - 12, CellSize - 12);
-                    }
-
-                    if (cell == 4 || cell == 6)
-                    {
-                        if (petImage != null)
-                            g.DrawImage(petImage, x + 3, y + 3, CellSize - 6, CellSize - 6);
+                        if (cell == 1)
+                            g.FillRectangle(wallBrush, x, y, CellSize, CellSize);
                         else
-                            g.FillEllipse(new SolidBrush(Color.FromArgb(120, 180, 220)), x + 4, y + 4, CellSize - 8, CellSize - 8);
+                        {
+                            g.FillRectangle(floorBrush, x, y, CellSize, CellSize);
+                            if (cell == 2 || cell == 6)
+                                g.FillEllipse(targetBrush, x + 12, y + 12, CellSize - 24, CellSize - 24);
+                        }
+
+                        if (cell == 3)
+                        {
+                            g.FillRectangle(boxBrush, x + 6, y + 6, CellSize - 12, CellSize - 12);
+                            g.DrawRectangle(boxBorderPen, x + 6, y + 6, CellSize - 12, CellSize - 12);
+                            g.DrawLine(boxLinePen, x + CellSize / 2, y + 8, x + CellSize / 2, y + CellSize - 8);
+                            g.DrawLine(boxLinePen, x + 8, y + CellSize / 2, x + CellSize - 8, y + CellSize / 2);
+                        }
+                        else if (cell == 5)
+                        {
+                            g.FillRectangle(completedBoxBrush, x + 6, y + 6, CellSize - 12, CellSize - 12);
+                            g.DrawRectangle(completedBoxBorderPen, x + 6, y + 6, CellSize - 12, CellSize - 12);
+                        }
+
+                        if (cell == 4 || cell == 6)
+                        {
+                            if (petImage != null)
+                                g.DrawImage(petImage, x + 3, y + 3, CellSize - 6, CellSize - 6);
+                            else
+                                g.FillEllipse(playerFallbackBrush, x + 4, y + 4, CellSize - 8, CellSize - 8);
+                        }
                     }
                 }
             }
+        }
+
+        private void DrawFlappyScene(Graphics g)
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.InterpolationMode = System.Drawing.Drawing2D.InterpolationMode.HighQualityBicubic;
+            using (System.Drawing.Drawing2D.LinearGradientBrush sky = new System.Drawing.Drawing2D.LinearGradientBrush(
+                new Rectangle(0, 0, gamePanel.Width, gamePanel.Height), Color.FromArgb(214, 236, 255), Color.FromArgb(255, 238, 247), 90))
+            {
+                g.FillRectangle(sky, 0, 0, gamePanel.Width, gamePanel.Height);
+            }
+
+            DrawCloud(g, 28, 45, 34, Color.FromArgb(185, 255, 255, 255));
+            DrawCloud(g, 290, 80, 26, Color.FromArgb(150, 255, 255, 255));
+            DrawCloud(g, 215, 305, 22, Color.FromArgb(130, 255, 255, 255));
+            DrawFlappyGate(g, (int)flappyPipeX, 0, FlappyPipeWidth, flappyGapY, true);
+            DrawFlappyGate(g, (int)flappyPipeX, flappyGapY + flappyGapHeight, FlappyPipeWidth,
+                gamePanel.Height - (flappyGapY + flappyGapHeight), false);
+
+            using (Font scoreFont = new Font("Microsoft YaHei", 9, FontStyle.Bold))
+            using (SolidBrush scoreBrush = new SolidBrush(CuteTheme.Ink))
+            {
+                g.DrawString("云朵门 " + flappyPassed + " / " + flappyTarget, scoreFont, scoreBrush, 12, 10);
+            }
+
+            DrawFlyingPet(g);
+
+            if (flappyGameOver || flappyComplete)
+            {
+                using (SolidBrush shade = new SolidBrush(Color.FromArgb(125, 255, 255, 255)))
+                using (Font titleFont = new Font("Microsoft YaHei", 15, FontStyle.Bold))
+                using (Font hintFont = new Font("Microsoft YaHei", 9))
+                using (SolidBrush titleBrush = new SolidBrush(flappyComplete ? Color.FromArgb(91, 170, 125) : CuteTheme.Rose))
+                using (SolidBrush hintBrush = new SolidBrush(CuteTheme.Ink))
+                {
+                    g.FillRectangle(shade, 0, 0, gamePanel.Width, gamePanel.Height);
+                    string title = flappyComplete ? "飞行成功！" : "差一点点！";
+                    string hint = flappyComplete ? "宠物落地休息一下~" : "点击画面或“再飞一次”重新挑战";
+                    SizeF titleSize = g.MeasureString(title, titleFont);
+                    SizeF hintSize = g.MeasureString(hint, hintFont);
+                    g.DrawString(title, titleFont, titleBrush, (gamePanel.Width - titleSize.Width) / 2, 150);
+                    g.DrawString(hint, hintFont, hintBrush, (gamePanel.Width - hintSize.Width) / 2, 185);
+                }
+            }
+        }
+
+        private void DrawCloud(Graphics g, int x, int y, int size, Color color)
+        {
+            using (SolidBrush brush = new SolidBrush(color))
+            {
+                g.FillEllipse(brush, x, y + size / 3, size, size / 2);
+                g.FillEllipse(brush, x + size / 3, y, size / 2, size / 2 + 4);
+                g.FillEllipse(brush, x + size / 2, y + size / 5, size / 2, size / 2);
+            }
+        }
+
+        private void DrawFlappyGate(Graphics g, int x, int y, int width, int height, bool top)
+        {
+            if (height <= 0) return;
+            using (SolidBrush bodyBrush = new SolidBrush(Color.FromArgb(177, 224, 207)))
+            using (SolidBrush capBrush = new SolidBrush(Color.FromArgb(207, 239, 224)))
+            using (SolidBrush dotBrush = new SolidBrush(Color.FromArgb(133, 196, 170)))
+            using (Pen edgePen = new Pen(Color.FromArgb(112, 175, 148), 2))
+            {
+                g.FillRectangle(bodyBrush, x + 8, y, width - 16, height);
+                int capY = top ? y + height - 20 : y - 12;
+                g.FillEllipse(capBrush, x - 4, capY, width + 8, 32);
+                g.DrawEllipse(edgePen, x - 4, capY, width + 8, 32);
+                for (int dotY = y + 24; dotY < y + height - 20; dotY += 38)
+                    g.FillEllipse(dotBrush, x + width / 2 - 3, dotY, 6, 6);
+            }
+        }
+
+        private void DrawFlyingPet(Graphics g)
+        {
+            float angle = Math.Max(-24.0f, Math.Min(32.0f, flappyBirdVelocity * 5.0f));
+            float wingLift = (float)Math.Sin(flappyWingFrame * 0.85f) * 9.0f;
+            System.Drawing.Drawing2D.GraphicsState state = g.Save();
+            g.TranslateTransform(FlappyBirdX, flappyBirdY);
+            g.RotateTransform(angle);
+
+            using (SolidBrush wingBrush = new SolidBrush(Color.FromArgb(230, 223, 211, 255)))
+            using (Pen wingBorder = new Pen(Color.FromArgb(178, 151, 137, 210), 1.5f))
+            {
+                RectangleF leftWing = new RectangleF(-32, -5 - wingLift / 2, 28, 19);
+                RectangleF rightWing = new RectangleF(5, -4 + wingLift / 2, 28, 19);
+                g.FillEllipse(wingBrush, leftWing);
+                g.FillEllipse(wingBrush, rightWing);
+                g.DrawEllipse(wingBorder, leftWing);
+                g.DrawEllipse(wingBorder, rightWing);
+            }
+
+            if (petImage != null)
+            {
+                g.DrawImage(petImage, -24, -24, 48, 48);
+            }
+            else
+            {
+                using (SolidBrush bodyBrush = new SolidBrush(CuteTheme.Rose))
+                using (SolidBrush cheekBrush = new SolidBrush(Color.FromArgb(255, 186, 202)))
+                using (SolidBrush eyeBrush = new SolidBrush(CuteTheme.Ink))
+                {
+                    g.FillEllipse(bodyBrush, -21, -19, 42, 38);
+                    g.FillEllipse(cheekBrush, -15, 4, 9, 6);
+                    g.FillEllipse(cheekBrush, 6, 4, 9, 6);
+                    g.FillEllipse(eyeBrush, -10, -4, 5, 7);
+                    g.FillEllipse(eyeBrush, 5, -4, 5, 7);
+                }
+            }
+            g.Restore(state);
         }
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
             if (currentState == State.Playing)
             {
+                if (selectedGame == GameType.FlappyBird)
+                {
+                    if (keyData == Keys.Space || keyData == Keys.Up || keyData == Keys.W)
+                    {
+                        FlapBird();
+                        return true;
+                    }
+                    return base.ProcessCmdKey(ref msg, keyData);
+                }
+
                 int dx = 0, dy = 0;
                 if (keyData == Keys.Left || keyData == Keys.A) dx = -1;
                 else if (keyData == Keys.Right || keyData == Keys.D) dx = 1;
@@ -3313,15 +4118,17 @@ namespace DesktopPet
 
         private void MovePlayer(int dx, int dy)
         {
-            if (dx == 0 && dy == 0) return;
+            if (grid == null || levelComplete || (dx == 0 && dy == 0)) return;
             int newX = playerX + dx;
             int newY = playerY + dy;
+            if (newX < 0 || newX >= gridCols || newY < 0 || newY >= gridRows) return;
             if (grid[newY, newX] == 1) return;
 
             if (grid[newY, newX] == 3 || grid[newY, newX] == 5)
             {
                 int boxNewX = newX + dx;
                 int boxNewY = newY + dy;
+                if (boxNewX < 0 || boxNewX >= gridCols || boxNewY < 0 || boxNewY >= gridRows) return;
                 if (grid[boxNewY, boxNewX] == 1 || grid[boxNewY, boxNewX] == 3 || grid[boxNewY, boxNewX] == 5) return;
 
                 int oldBoxCell = grid[newY, newX];
@@ -3353,22 +4160,25 @@ namespace DesktopPet
 
         private void OnLevelComplete()
         {
+            if (levelComplete) return;
+            levelComplete = true;
+            int completedLevel = currentLevel;
             statusLabel.Text = "恭喜过关！";
             statusLabel.ForeColor = Color.FromArgb(100, 180, 100);
 
-            if (!pet.SokobanRewarded[currentLevel])
+            if (!pet.SokobanRewarded[completedLevel])
             {
-                pet.SokobanRewarded[currentLevel] = true;
-                pet.AddCrystals(levelRewards[currentLevel]);
+                pet.SokobanRewarded[completedLevel] = true;
+                pet.AddCrystals(levelRewards[completedLevel]);
                 pet.SaveSokobanProgress();
-                statusLabel.Text = "恭喜过关！获得 " + levelRewards[currentLevel] + " \uD83D\uDC8E";
+                statusLabel.Text = "恭喜过关！获得 " + levelRewards[completedLevel] + " \uD83D\uDC8E";
                 if (crystalLabel != null)
-                    crystalLabel.Text = "已获得 " + levelRewards[currentLevel] + " \uD83D\uDC8E!";
+                    crystalLabel.Text = "已获得 " + levelRewards[completedLevel] + " \uD83D\uDC8E!";
             }
 
-            if (currentLevel < 10 && pet.SokobanUnlockedLevel <= currentLevel)
+            if (completedLevel < 10 && pet.SokobanUnlockedLevel <= completedLevel)
             {
-                pet.SokobanUnlockedLevel = currentLevel + 1;
+                pet.SokobanUnlockedLevel = completedLevel + 1;
                 pet.SaveSokobanProgress();
             }
 
@@ -3377,8 +4187,9 @@ namespace DesktopPet
             t.Tick += (s, e) =>
             {
                 t.Stop();
-                if (currentLevel < 10 && pet.SokobanUnlockedLevel > currentLevel)
-                    StartLevel(currentLevel + 1);
+                t.Dispose();
+                if (!IsDisposed && currentState == State.Playing && levelComplete && currentLevel == completedLevel && completedLevel < 10 && pet.SokobanUnlockedLevel > completedLevel)
+                    StartLevel(completedLevel + 1);
             };
             t.Start();
         }
